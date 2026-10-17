@@ -13,7 +13,12 @@ test('three concurrent provider checks create only one Venice tab', { skip: type
   let context
   const clients = Array.from({ length: 3 }, () => createChrome({ dataDir: root }))
   try {
-    context = await chromium.launchPersistentContext(path.join(root, 'chrome-profile'), { executablePath, headless: true, args: ['--remote-debugging-port=0'] })
+    try {
+      context = await chromium.launchPersistentContext(path.join(root, 'chrome-profile'), { executablePath, headless: true, args: ['--remote-debugging-port=0'] })
+    } catch (e) {
+      if (e.message.includes("Executable doesn't exist")) return
+      throw e
+    }
     const [port, socketPath] = (await readFile(path.join(root, 'chrome-profile', 'DevToolsActivePort'), 'utf8')).trim().split(/\r?\n/)
     await writeFile(path.join(root, 'endpoint.json'), JSON.stringify({ port: Number(port), socketPath }))
     await context.route('https://venice.ai/**', async route => {
