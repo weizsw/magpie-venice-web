@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { MODEL, events, toVenice, convert, parseToolReply, countTokens, estimatePromptTokens, reasoningMode, REASONING_VARIANTS } from '../lib/protocol.mjs'
+import { MODEL, MODEL_NAME, QWEN_MODEL, QWEN_MODEL_NAME, resolveModel, MODEL_ALIASES, events, toVenice, convert, parseToolReply, countTokens, estimatePromptTokens, reasoningMode, REASONING_VARIANTS } from '../lib/protocol.mjs'
 import { VeniceWebPlugin } from '../index.mjs'
 
 const encoder = new TextEncoder()
@@ -113,10 +113,34 @@ test('plugin exposes only its provider with a single browser login method', asyn
   const cfg = {}; await plugin.config(cfg)
   assert.equal(plugin.auth.provider, 'venice-web')
   assert.equal(plugin.auth.maxConcurrency, 1)
+  assert.ok(Object.keys(cfg.provider['venice-web'].models).length >= 20)
   assert.equal(cfg.provider['venice-web'].models[MODEL].limit.context, 524288)
+  assert.equal(cfg.provider['venice-web'].models[MODEL].limit.output, 32768)
+  assert.equal(cfg.provider['venice-web'].models[QWEN_MODEL].limit.context, 262144)
+  assert.equal(cfg.provider['venice-web'].models[QWEN_MODEL].limit.output, 65536)
   assert.equal(plugin.auth.methods[0].type, 'oauth')
   assert.deepEqual(Object.keys(cfg.provider['venice-web'].models[MODEL].variants), ['disabled', 'adaptive', 'enabled'])
+  assert.deepEqual(Object.keys(cfg.provider['venice-web'].models[QWEN_MODEL].variants), ['disabled', 'adaptive', 'enabled'])
   assert.throws(() => toVenice({ ...body, model: 'deepseek-v4-1-flash' }), /Unsupported model/)
+})
+
+test('qwen-3-8-27b and aliases map correctly and convert preserves requested model', async () => {
+  assert.equal(resolveModel('qwen-3-8-27b'), 'qwen-3-8-27b')
+  assert.equal(resolveModel('qwen-3.8-27b'), 'qwen-3-8-27b')
+  assert.equal(resolveModel('qwen3.8-27b'), 'qwen-3-8-27b')
+  assert.equal(resolveModel('qwen3-8-27b'), 'qwen-3-8-27b')
+  assert.equal(resolveModel('qwen38-27b'), 'qwen-3-8-27b')
+  assert.equal(resolveModel('deepseek-v4-1-flash-free'), 'deepseek-v4-1-flash-free')
+  assert.equal(resolveModel('unknown-model'), undefined)
+
+  const req = toVenice({ model: 'qwen-3.8-27b', messages: [{ role: 'user', content: 'hello' }] })
+  assert.equal(req.request.modelId, 'qwen-3-8-27b')
+
+  const sse = frame('response.output_text.delta', { delta: 'qwen answer' }) + frame('response.completed', {})
+  const resp = await convert(upstream(sse), { model: 'qwen-3-8-27b', messages: [{ role: 'user', content: 'hello' }] }, req)
+  const json = await resp.json()
+  assert.equal(json.model, 'qwen-3-8-27b')
+  assert.equal(json.choices[0].message.content, 'qwen answer')
 })
 
 test('CJK and English token estimation', () => {

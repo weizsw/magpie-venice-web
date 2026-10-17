@@ -1,11 +1,27 @@
 import { createSession } from './lib/session.mjs'
 import { createCookies } from './lib/cookies.mjs'
-import { MODEL, MODEL_NAME, REASONING_VARIANTS, toVenice, convert } from './lib/protocol.mjs'
+import { MODEL, MODEL_NAME, DEFAULT_FREE_MODELS, KNOWN_ALIASES, DISCOVERED_FREE_MODELS, REASONING_VARIANTS, toVenice, convert } from './lib/protocol.mjs'
 
 const PROVIDER = 'venice-web'
 const BASE = 'https://venice.ai/magpie/v1'
 const expired = message => Object.assign(new Error(message), { signIn: 'expired' })
 const fail = (message, status = 400) => Response.json({ error: { message, type: 'venice_web_error' } }, { status })
+
+const buildModels = (toolMode, catalogModels = DEFAULT_FREE_MODELS) => {
+  const result = {}
+  for (const [id, m] of Object.entries(catalogModels)) {
+    result[id] = {
+      name: m.name,
+      limit: m.limit ?? { context: 128000, output: 16384 },
+      reasoning: m.reasoning ?? true,
+      tool_call: toolMode === 'prompt',
+      modalities: { input: ['text'], output: ['text'] },
+      free: true,
+      ...(m.reasoning ? { variants: REASONING_VARIANTS } : {}),
+    }
+  }
+  return result
+}
 
 export const VeniceWebPlugin = async (_input, options = {}) => {
   const cookies = createCookies(options)
@@ -28,7 +44,7 @@ export const VeniceWebPlugin = async (_input, options = {}) => {
       cfg.provider ??= {}
       cfg.provider[PROVIDER] ??= {
         name: 'Venice Web', npm: '@ai-sdk/openai-compatible', api: BASE,
-        models: { [MODEL]: { name: MODEL_NAME, limit: { context: 524288, output: 32768 }, reasoning: true, tool_call: toolMode === 'prompt', modalities: { input: ['text'], output: ['text'] }, free: true, variants: REASONING_VARIANTS } },
+        models: buildModels(toolMode),
       }
     },
     auth: {
@@ -114,13 +130,67 @@ export const VeniceWebPlugin = async (_input, options = {}) => {
       id: PROVIDER,
       async models(provider, { auth } = {}) {
         if (!auth) return provider.models
-        const response = await request(auth, '/api/v2/agents/configuration_options')
-        if (response.status === 401) throw expired('Venice session expired')
-        if (!response.ok) { await response.body?.cancel(); return provider.models }
-        const catalog = await response.json()
-        const target = catalog.agentModelOptions?.find(m => m.id === MODEL)
-        if (!target) return {}
-        return { [MODEL]: { ...provider.models[MODEL], name: target.name, free: target.usesCredits === false } }
+        let agentsData, appData
+        try {
+          const agentsRes = await request(auth, '/api/v2/agents/configuration_options').catch(() => null)
+          if (agentsRes?.status === 401) throw expired('Venice session expired')
+          if (agentsRes?.ok) agentsData = await agentsRes.json().catch(() => null)
+
+          const appRes = await request(auth, '/api/app/models').catch(() => null)
+          if (appRes?.status === 401) throw expired('Venice session expired')
+          if (appRes?.ok) appData = await appRes.json().catch(() => null)
+        } catch (e) {
+          if (e.signIn === 'expired') throw e
+          return provider.models
+        }
+
+        if (!agentsData && !appData) return provider.models
+
+        const discovered = {}
+
+        if (agentsData?.agentModelOptions) {
+          for (const m of agentsData.agentModelOptions) {
+            if (m.usesCredits === false && m.id !== 'default') {
+              discovered[m.id] = {
+                name: m.name,
+                limit: { context: 524288, output: 32768 },
+                reasoning: true,
+                free: true,
+              }
+            }
+          }
+        }
+
+        if (appData?.text?.models) {
+          for (const m of appData.text.models) {
+            if (m.usesCredits === false && m.active !== false) {
+              let name = m.friendly_name || m.name || m.id
+              if (m.id.startsWith('e2ee-') && !name.includes('TEE') && !name.includes('E2EE')) {
+                name = `${name} (TEE)`
+              }
+              discovered[m.id] = {
+                name,
+                limit: {
+                  context: m.maxContextLength || 128000,
+                  output: m.maxResponseTokens || 16384,
+                },
+                reasoning: m.supportsReasoning ?? false,
+                free: true,
+              }
+              if (m.aliasIds) {
+                for (const a of m.aliasIds) KNOWN_ALIASES[a] = m.id
+              }
+            }
+          }
+        }
+
+        if (!Object.keys(discovered).length) return provider.models
+
+        for (const [id, m] of Object.entries(discovered)) {
+          DISCOVERED_FREE_MODELS.set(id, m)
+        }
+
+        return buildModels(toolMode, discovered)
       },
     },
   }

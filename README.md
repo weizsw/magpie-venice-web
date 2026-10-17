@@ -1,9 +1,14 @@
 # magpie-venice-web
 
-在 [Magpie](https://usemagpie.ai/) 中通过 Venice 网页会话使用 **DeepSeek V4.1 Flash Uncensored**：
+在 [Magpie](https://usemagpie.ai/) 中通过 Venice 网页会话使用全部 **网页免费模型**（`usesCredits: false`，共 20 款）：
 
 ```text
 venice-web/deepseek-v4-1-flash-free
+venice-web/qwen-3-8-27b
+venice-web/kimi-k2-5
+venice-web/zai-org-glm-5.2
+venice-web/venice-uncensored-1-2
+...
 ```
 
 默认使用 **Cookie 直连**，登录后不需要浏览器保持开启。支持流式/非流式回答、系统提示词、完整历史和模拟工具调用。已在 macOS、Magpie 0.1.1247 上真实验证。
@@ -16,6 +21,7 @@ Cookie 模式需要 **Node.js 22+**。Magpie 插件由 Bun 运行，HTTP 请求�
 magpie plugin add /absolute/path/to/magpie-venice-web
 magpie plugin login venice-web
 magpie provider test venice-web deepseek-v4-1-flash-free
+magpie provider test venice-web qwen-3-8-27b
 ```
 
 登录时提供两种方式：
@@ -73,9 +79,34 @@ launchctl bootout gui/$(id -u) ~/Library/LaunchAgents/ai.magpie.venice-cookie-ob
 
 ## 模型与工具
 
-目标网页 ID 为 `deepseek-v4-1-flash-free`，与普通 `deepseek-v4-1-flash` 分开。网页目录标记目标 `usesCredits:false`，上下文 524,288 tokens；服务仍可能限速。输出上限按保守值 32,768 声明，后端实际输出上限尚未确认。
+插件会自动拉取 Venice Agent 模式和 Classic Chat 经典目录中所有标记为 `usesCredits: false` 的免费模型，共 20 款：
 
-插件使用 `/api/inference/chat/agents/ad-hoc`，不会往浏览器聊天历史写入消息。图片/文件和结构化输出明确拒绝；精确的 temperature/top_p/max_tokens 不受网页接口支持。
+| 模型分类 | 模型 ID | 模型名称 | 上下文 | 推理支持 |
+| --- | --- | --- | --- | --- |
+| **DeepSeek** | `deepseek-v4-1-flash-free` | DeepSeek V4.1 Flash Uncensored | 524K | ✓ |
+| | `deepseek-ai-DeepSeek-V3.2` | DeepSeek V3.2 | 160K | ✓ |
+| **Qwen** | `qwen-3-8-27b` | Qwen 3.8 27B | 262K | ✓ |
+| | `qwen3-6-27b` | Qwen 3.6 27B | 256K | ✓ |
+| | `qwen3-5-35b-a3b` | Qwen 3.5 35B A3B | 256K | ✓ |
+| **GLM** | `zai-org-glm-5.2` | GLM 5.2 | 1000K | ✓ |
+| | `zai-org-glm-4.6` | GLM 4.6 | 198K | ✗ |
+| **Kimi** | `kimi-k2-5` | Kimi K2.5 | 524K | ✓ |
+| **Venice** | `venice-uncensored-1-2` | Venice Uncensored 1.2 | 128K | ✗ |
+| **Gemma** | `google-gemma-4-31b-it` | Google Gemma 4 31B Instruct | 256K | ✓ |
+| | `google-gemma-4-26b-a4b-it` | Google Gemma 4 26B A4B Instruct | 256K | ✓ |
+| | `gemma4-uncensored` | Gemma 4 Uncensored | 256K | ✗ |
+| **Aion** | `aion-labs-aion-3-0` | Aion 3.0 | 128K | ✓ |
+| | `aion-labs-aion-3-0-mini` | Aion 3.0 Mini | 128K | ✓ |
+| **E2EE / TEE** | `e2ee-gpt-oss-120b-p` | GPT OSS 120B (TEE) | 128K | ✓ |
+| | `e2ee-qwen3-8-27b` | Qwen 3.8 27B (TEE) | 262K | ✓ |
+| | `e2ee-qwen3-6-35b-a3b` | Qwen 3.6 35B A3B FP8 (TEE) | 32K | ✓ |
+| | `e2ee-gemma-4-26b-a4b-uncensored-p` | Gemma 4 26B A4B Uncensored (TEE) | 64K | ✗ |
+| | `e2ee-qwen-2-5-7b-p` | Qwen 2.5 7B (TEE) | 32K | ✗ |
+| | `e2ee-qwen3-vl-30b-a3b-p` | Qwen3 VL 30B A3B (TEE) | 128K | ✗ |
+
+支持常见的官方别名映射（例如 `qwen-3.8-27b`、`deepseek-v3-2`、`venice-uncensored` 等）。
+
+插件使用 `/api/inference/chat/agents/ad-hoc` 发送推理请求，不会往浏览器聊天历史写入消息。图片/文件和结构化输出明确拒绝；精确的 temperature/top_p/max_tokens 不受网页接口支持。
 
 ### 用量统计
 
@@ -120,6 +151,7 @@ Node 子进程继承环境；与浏览器的系统代理出口可能不同。需
 npm test
 bun test
 magpie provider test venice-web deepseek-v4-1-flash-free
+magpie provider test venice-web qwen-3-8-27b
 ```
 
 - 缺少 `__client`：复制 Clerk 域请求，不要只复制 Venice 域 Cookie。

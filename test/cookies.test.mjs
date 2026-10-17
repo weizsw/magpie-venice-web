@@ -66,3 +66,11 @@ test('cookie account handles and user identity cannot select another account', a
   const account = await f.transport.import('__client=fixture')
   await assert.rejects(() => f.transport.request({ refresh: account.handle, uid: 'other' }, '/api/v2/agents/configuration_options'), /does not match/)
 }))
+
+test('cookie request allows supported routes and rejects unknown routes', async () => fixture(async f => {
+  const account = await f.transport.import('__client=fixture')
+  const auth = { refresh: account.handle, uid }
+  const resp = await f.transport.request(auth, '/api/app/models')
+  assert.equal(resp.status, 200)
+  await assert.rejects(() => f.transport.request(auth, '/api/unknown'), /Unsupported Venice cookie route/)
+}))
