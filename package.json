@@ -1,0 +1,37 @@
+{
+  "name": "magpie-venice-web",
+  "version": "0.1.0",
+  "description": "Venice web session provider for Magpie and OpenCode",
+  "type": "module",
+  "main": "./index.mjs",
+  "files": [
+    "index.mjs",
+    "lib",
+    "scripts",
+    "docs",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "test": "node --test",
+    "login": "node scripts/session.mjs login",
+    "status": "node scripts/session.mjs status"
+  },
+  "dependencies": {
+    "playwright-core": "1.61.1",
+    "tough-cookie": "^6.0.0"
+  },
+  "keywords": [
+    "magpie-plugin",
+    "opencode",
+    "opencode-plugin",
+    "venice",
+    "provider",
+    "auth"
+  ],
+  "license": "MIT",
+  "magpie": {
+    "maxConcurrency": 1,
+    "icon": "https://venice.ai/favicon.ico"
+  }
+}
