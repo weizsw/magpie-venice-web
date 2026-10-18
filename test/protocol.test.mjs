@@ -85,6 +85,8 @@ test('reasoning_effort maps onto the three real Venice web modes', () => {
   assert.equal(reasoningMode({ reasoning_effort: 'high' }), 'enabled')
   assert.equal(reasoningMode({ reasoning_effort: 'enabled' }), 'enabled')
   assert.equal(toVenice({ ...body, reasoning_effort: 'adaptive' }).request.reasoningMode, 'adaptive')
+  assert.equal(toVenice({ ...body, reasoning_effort: 'low' }).request.reasoningEffort, 'low')
+  assert.equal(toVenice({ ...body, reasoning_effort: 'high' }).request.reasoningEffort, 'xhigh')
 })
 
 test('reasoning items are separated from the answer, in stream and non-stream', async () => {
